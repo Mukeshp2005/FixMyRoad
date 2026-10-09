@@ -17,12 +17,12 @@ export const VALID_STATUSES = [
 ];
 
 export const ALLOWED_TRANSITIONS = {
-  SUBMITTED: ['UNDER_REVIEW'],
-  UNDER_REVIEW: ['ACCEPTED', 'REJECTED'],
-  ACCEPTED: ['ASSIGNED'],
-  ASSIGNED: ['IN_PROGRESS'],
+  SUBMITTED: ['UNDER_REVIEW', 'ACCEPTED', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'],
+  UNDER_REVIEW: ['ACCEPTED', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'],
+  ACCEPTED: ['ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'],
+  ASSIGNED: ['IN_PROGRESS', 'RESOLVED'],
   IN_PROGRESS: ['RESOLVED'],
-  RESOLVED: ['CLOSED', 'UNDER_REVIEW'], // CLOSED on rating 4-5 verification; UNDER_REVIEW when Admin accepts reopen request
+  RESOLVED: ['CLOSED', 'UNDER_REVIEW'],
   REJECTED: [],
   CLOSED: [],
 };
@@ -82,6 +82,10 @@ export const changeComplaintStatusWithTransaction = async ({
 
   if (assignedTo !== undefined) {
     updateFields.assignedTo = assignedTo;
+  }
+
+  if (targetStatus === 'REJECTED') {
+    updateFields.rejectionReason = comment;
   }
 
   if (resolutionComment !== undefined) {

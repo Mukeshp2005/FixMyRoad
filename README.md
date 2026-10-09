@@ -1,64 +1,77 @@
-# FixMyRoad — AI-Powered Road Damage Reporting Platform
+# FixMyRoad Setup & Execution Guide
 
-FixMyRoad is an enterprise AI-powered road damage reporting and municipal routing platform designed to streamline civic infrastructure maintenance. Citizens can snap a photo of damaged roads, which is analyzed by computer vision models to classify damage, extract GPS coordinates, route the issue to the appropriate municipal jurisdiction, track resolution progress transparently, verify repair quality, and analyze civic metrics.
-
----
-
-## 📌 Project Objective
-
-The objective of FixMyRoad is to eliminate administrative delays in civic road repair by automating damage detection, location mapping, municipality routing, and resolution verification using modern web technologies, spatial GeoJSON algorithms, and computer vision models.
+This repository contains the full source code for **FixMyRoad** - an automated, AI-assisted civic infrastructure & complaint management platform built with Node.js, Express, React (Vite), MongoDB, and Google Gemini Vision AI.
 
 ---
 
-## 🏗️ Architecture
+## 🛠️ Quick Start (Running on Any Device)
 
-```text
-                 FixMyRoad
-                     │
-          ┌──────────┴──────────┐
-          │                     │
-       React                Node.js
-       Client               Express
-          │                     │
-          │                     ├── Operations & Observability Cockpit
-          │                     │     (Graceful Shutdown, metricsService, Backup & Restore)
-          │                     │
-          │                     ├── Security & Hardening (RequestId, Helmet, CSRF, Logger, Sanitize)
-          │                     ├── Health & Readiness (/api/health/live, /api/health/ready)
-          │                     ├── Analytics & System Health Subsystem
-          │                     ├── Citizen Verification & Reopen Subsystem
-          │                     ├── Municipality Admin Dashboard & Workflow
-          │                     ├── Asynchronous Outbox Notification Subsystem
-          │                     ├── GeoJSON 2dsphere Spatial Routing
-          │                     ├── Multer / Sharp / Cloudinary EXIF Privacy
-          │                     ├── MongoDB (Mongoose Schema Architecture)
-          │                     └── Python AI (FastAPI + Ultralytics YOLO)
-          │                            │
-          │                         FastAPI
-          │                            │
-          │                           YOLO
-          │
-       GPS / Maps
+### 1. Prerequisites
+- Node.js `v18+`
+- MongoDB running locally (`mongodb://127.0.0.1:27017/fixmyroad`) or MongoDB Atlas.
+
+### 2. Environment Configuration
+Create a `.env` file in the root directory (or copy `.env.example` to `.env`):
+```bash
+cp .env.example .env
+```
+Also copy `.env` into `server/.env` if running backend independently:
+```bash
+cp .env server/.env
 ```
 
 ---
 
-## 📖 Project Documentation & Operations Manuals
+## 🚀 Running the Project
 
-Complete manuals are available under the `/docs` directory:
-1. **Academic Submission Handbook**: [academic-submission-handbook.md](file:///c:/Users/messy/OneDrive/Pictures/Documents/Custom%20Office%20Templates/OneDrive/Attachments/Sem%207%20project/docs/academic-submission-handbook.md) — System overview, schema models, API catalog, and security mechanisms.
-2. **Demonstration Runbook**: [project-demo-runbook.md](file:///c:/Users/messy/OneDrive/Pictures/Documents/Custom%20Office%20Templates/OneDrive/Attachments/Sem%207%20project/docs/project-demo-runbook.md) — Setup commands and user workflow test steps.
-3. **Disaster Recovery (DR) Plan**: [disaster-recovery.md](file:///c:/Users/messy/OneDrive/Pictures/Documents/Custom%20Office%20Templates/OneDrive/Attachments/Sem%207%20project/docs/disaster-recovery.md) — RPO/RTO metrics and database backup & restore.
-4. **Production Operations Runbook**: [production-operations.md](file:///c:/Users/messy/OneDrive/Pictures/Documents/Custom%20Office%20Templates/OneDrive/Attachments/Sem%207%20project/docs/production-operations.md) — Express server signal shutdown, logs, and deployment steps.
-5. **Security & Hardening Specification**: [security-audit.md](file:///c:/Users/messy/OneDrive/Pictures/Documents/Custom%20Office%20Templates/OneDrive/Attachments/Sem%207%20project/docs/security-audit.md) — Double-submit CSRF, rate limiters, and EXIF sanitization.
-6. **Testing & Verification Matrix**: [testing.md](file:///c:/Users/messy/OneDrive/Pictures/Documents/Custom%20Office%20Templates/OneDrive/Attachments/Sem%207%20project/docs/testing.md) — Automated script commands and validation status check.
-7. **Analytics & Reporting Subsystem**: [analytics-and-reporting.md](file:///c:/Users/messy/OneDrive/Pictures/Documents/Custom%20Office%20Templates/OneDrive/Attachments/Sem%207%20project/docs/analytics-and-reporting.md) — DB aggregations and CSV formula protection.
+### Start Backend Server:
+```bash
+cd server
+npm install
+npm run dev
+```
+Backend server runs at `http://localhost:5000`.
+
+### Start Client App:
+```bash
+cd client
+npm install
+npm run dev
+```
+Frontend application runs at `http://localhost:5173`.
 
 ---
 
-## 🚀 Technology Stack
+## 🔐 Default Admin & Officer Credentials
 
-- **Frontend**: React.js, Vite, JavaScript, Tailwind CSS, Leaflet, React Leaflet, React Router DOM, Axios, Lucide React
-- **Backend**: Node.js, Express.js, MongoDB, Mongoose, Nodemailer, Multer, Sharp, Cloudinary SDK, Axios, bcryptjs, jsonwebtoken, cookie-parser, Cors, Helmet, Rate Limiter
-- **AI Service**: Python, FastAPI, Uvicorn, Ultralytics YOLO, OpenCV, Pillow, PyTorch, NumPy, Pydantic
-- **Infrastructure / Ops**: Docker Compose, Nginx, Git
+### 1. Super Admin Portal (`/admin/dashboard`)
+- **Username:** `admin`
+- **Email:** `admin@fixmyroad.gov`
+- **Password:** `AdminPass123!`
+
+### 2. Government Officer Portal (`/municipality/dashboard`)
+- **Username:** `muniadmin`
+- **Email:** `municipality@fixmyroad.local`
+- **Password:** `Municipality@12345`
+
+### 3. Citizen Portal (`/citizen/dashboard`)
+- **Email:** `citizen@fixmyroad.local`
+- **Password:** `CitizenPass123!`
+
+---
+
+## ✨ Features Implemented & Working
+1. **Citizen Complaint System**:
+   - Manual text input for **Taluk** and **Zone / Ward**.
+   - Editable & Deletable complaints by Citizens.
+   - Dispute Rejection & Escalation workflows.
+2. **Google Gemini Vision AI Verification**:
+   - Live AI verification checking uploaded pothole/damage photos against description text.
+   - Automatically flags fake or mismatched images before saving.
+3. **Government Official Inspection Portal**:
+   - Access to view, inspect, and transition status on **all citizen complaints**.
+   - Validated status transitions (`ACCEPT`, `IN PROGRESS`, `RESOLVED`, `REJECT`).
+   - Mandatory rejection reason enforcement.
+4. **Super Admin Access & User Creation**:
+   - Super Admin can create custom logins/passwords for new Government Officials and Admins with specific roles (`MUNICIPALITY_ADMIN`, `MUNICIPALITY_OFFICER`, `SUPER_ADMIN`).
+   - Super Admin user directory with instant account removal capabilities.

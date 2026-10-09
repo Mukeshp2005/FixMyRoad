@@ -3,10 +3,10 @@ import { X, CheckCircle2, AlertCircle, Loader2, Upload, Sparkles, Image as Image
 import { updateComplaintStatusApi, uploadResolutionImageApi } from '../../services/municipalityComplaintService';
 
 const ALLOWED_TRANSITIONS = {
-  SUBMITTED: ['UNDER_REVIEW'],
-  UNDER_REVIEW: ['ACCEPTED', 'REJECTED'],
-  ACCEPTED: ['ASSIGNED'],
-  ASSIGNED: ['IN_PROGRESS'],
+  SUBMITTED: ['UNDER_REVIEW', 'ACCEPTED', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'],
+  UNDER_REVIEW: ['ACCEPTED', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'],
+  ACCEPTED: ['ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'],
+  ASSIGNED: ['IN_PROGRESS', 'RESOLVED'],
   IN_PROGRESS: ['RESOLVED'],
   RESOLVED: ['CLOSED'],
 };

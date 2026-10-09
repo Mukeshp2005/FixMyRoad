@@ -1,4 +1,8 @@
+import mongoose from 'mongoose';
 import Complaint from '../models/Complaint.js';
+import User from '../models/User.js';
+import Municipality from '../models/Municipality.js';
+import HierarchyLevel from '../models/HierarchyLevel.js';
 import { changeComplaintStatusWithTransaction } from '../services/complaintStatusService.js';
 import {
   getMunicipalityStats,
@@ -15,14 +19,7 @@ import { processAndUploadImage } from '../services/imageUploadService.js';
  */
 export const getDashboardStats = async (req, res, next) => {
   try {
-    const municipalityId = req.user.municipalityId;
-    if (!municipalityId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Authenticated user is not assigned to any municipality',
-      });
-    }
-
+    const municipalityId = req.user.municipalityId || null;
     const stats = await getMunicipalityStats(municipalityId);
 
     res.status(200).json({
@@ -75,13 +72,26 @@ export const getComplaints = async (req, res, next) => {
  */
 export const getComplaintDetails = async (req, res, next) => {
   try {
-    // req.complaint is populated by verifyMunicipalityComplaintAccess middleware
-    const complaint = await Complaint.findById(req.complaint._id)
+    const complaintIdParam = req.params.complaintId;
+    const targetId = req.complaint?._id || complaintIdParam;
+
+    const query = mongoose.isValidObjectId(targetId)
+      ? { $or: [{ _id: targetId }, { complaintId: targetId }] }
+      : { complaintId: targetId };
+
+    const complaint = await Complaint.findOne(query)
       .populate('citizenId', 'name email phone')
       .populate('assignedTo', 'name email role phone')
       .populate('municipalityId', 'name code state district contactEmail contactPhone notificationMethod apiEndpoint')
       .populate('currentHierarchyLevelId', 'levelName levelOrder escalationSlaDays')
       .exec();
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint record not found',
+      });
+    }
 
     res.status(200).json({
       success: true,

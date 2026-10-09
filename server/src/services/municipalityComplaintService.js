@@ -3,13 +3,10 @@ import User from '../models/User.js';
 import { changeComplaintStatusWithTransaction } from './complaintStatusService.js';
 
 /**
- * Retrieves aggregate complaint statistics strictly scoped to a municipalityId.
+ * Retrieves aggregate complaint statistics across all complaints for officer view.
  */
 export const getMunicipalityStats = async (municipalityId) => {
-  const matchQuery = { municipalityId };
-
   const stats = await Complaint.aggregate([
-    { $match: matchQuery },
     {
       $group: {
         _id: null,
@@ -50,7 +47,7 @@ export const getMunicipalityStats = async (municipalityId) => {
 };
 
 /**
- * Retrieves paginated complaints strictly scoped to municipalityId with whitelisted filters.
+ * Retrieves paginated complaints for officer dashboard with whitelisted filters.
  */
 export const getMunicipalityComplaints = async ({
   municipalityId,
@@ -65,10 +62,6 @@ export const getMunicipalityComplaints = async ({
   to,
 }) => {
   const query = {};
-
-  if (municipalityId) {
-    query.municipalityId = municipalityId;
-  }
 
   if (status) query.status = status;
   if (severity) query.severity = severity;
@@ -87,6 +80,8 @@ export const getMunicipalityComplaints = async ({
       { address: { $regex: cleanSearch, $options: 'i' } },
       { description: { $regex: cleanSearch, $options: 'i' } },
       { issueType: { $regex: cleanSearch, $options: 'i' } },
+      { taluk: { $regex: cleanSearch, $options: 'i' } },
+      { zone: { $regex: cleanSearch, $options: 'i' } },
     ];
   }
 
@@ -99,72 +94,67 @@ export const getMunicipalityComplaints = async ({
   if (sort === 'severity') sortOption = { severity: -1, createdAt: -1 };
   if (sort === 'updated') sortOption = { updatedAt: -1 };
 
-  const total = await Complaint.countDocuments(query);
-  const complaints = await Complaint.find(query)
-    .sort(sortOption)
-    .skip(skip)
-    .limit(limitNum)
-    .populate('citizenId', 'name email phone')
-    .populate('assignedTo', 'name email role phone')
-    .populate('municipalityId', 'name code state district')
-    .exec();
+  const [complaints, totalRecords] = await Promise.all([
+    Complaint.find(query)
+      .sort(sortOption)
+      .skip(skip)
+      .limit(limitNum)
+      .populate('citizenId', 'name email phone')
+      .populate('assignedTo', 'name email role phone')
+      .populate('municipalityId', 'name code state district')
+      .populate('currentHierarchyLevelId', 'levelName levelOrder escalationSlaDays')
+      .exec(),
+    Complaint.countDocuments(query),
+  ]);
+
+  const totalPages = Math.ceil(totalRecords / limitNum);
 
   return {
     complaints,
     pagination: {
-      page: pageNum,
+      currentPage: pageNum,
+      totalPages,
+      totalRecords,
       limit: limitNum,
-      total,
-      pages: Math.ceil(total / limitNum) || 1,
+      hasNextPage: pageNum < totalPages,
+      hasPrevPage: pageNum > 1,
     },
   };
 };
 
-/**
- * Finds active municipal officers & admins belonging to a specific municipality available for assignment.
- */
 export const getMunicipalityOfficers = async (municipalityId) => {
-  return await User.find({
-    municipalityId,
-    role: { $in: ['MUNICIPALITY_OFFICER', 'MUNICIPALITY_ADMIN'] },
+  const query = {
+    role: { $in: ['MUNICIPALITY_ADMIN', 'MUNICIPALITY_OFFICER'] },
     isActive: true,
-  }).select('_id name email role phone');
+  };
+
+  const officers = await User.find(query).select('name email role phone municipalityId').exec();
+  return officers;
 };
 
-/**
- * Assigns a complaint to an active officer within the same municipality and executes state machine transition (ACCEPTED -> ASSIGNED).
- */
-export const assignComplaintToOfficer = async ({ complaint, officerId, comment, updatedBy }) => {
-  // Verify officer exists, is active, and belongs to same municipality
-  const officer = await User.findOne({
-    _id: officerId,
-    municipalityId: complaint.municipalityId,
-    role: { $in: ['MUNICIPALITY_OFFICER', 'MUNICIPALITY_ADMIN'] },
-    isActive: true,
-  });
+export const assignComplaintToOfficer = async ({ complaintId, assignedTo, comment, updatedBy }) => {
+  const complaint = await Complaint.findOne({ complaintId });
 
-  if (!officer) {
-    const error = new Error('Invalid officer assignment target: Officer does not exist, is inactive, or belongs to a different municipality');
-    error.statusCode = 400;
-    error.code = 'INVALID_OFFICER_ASSIGNMENT';
+  if (!complaint) {
+    const error = new Error('Complaint not found');
+    error.statusCode = 404;
     throw error;
   }
 
-  // Enforce state machine rules: Assignment requires current status to be ACCEPTED to move to ASSIGNED
-  if (complaint.status !== 'ACCEPTED') {
-    const error = new Error(`Cannot assign officer: Complaint status must be ACCEPTED (Current status: ${complaint.status})`);
+  const targetOfficer = await User.findById(assignedTo);
+  if (!targetOfficer || !['MUNICIPALITY_ADMIN', 'MUNICIPALITY_OFFICER'].includes(targetOfficer.role)) {
+    const error = new Error('Invalid officer assignedTo ID.');
     error.statusCode = 400;
-    error.code = 'INVALID_STATUS_TRANSITION';
     throw error;
   }
 
-  const assignComment = comment || `Assigned to municipal officer ${officer.name} (${officer.email})`;
-
-  return await changeComplaintStatusWithTransaction({
+  const updatedComplaint = await changeComplaintStatusWithTransaction({
     complaint,
     targetStatus: 'ASSIGNED',
-    comment: assignComment,
-    assignedTo: officer._id,
+    comment: comment || `Assigned complaint to officer ${targetOfficer.name}`,
+    assignedTo: targetOfficer._id,
     updatedBy,
   });
+
+  return updatedComplaint;
 };

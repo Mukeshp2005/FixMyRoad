@@ -39,3 +39,16 @@ export const getAdminStatsApi = async (params = {}) => {
 export const getAdminComplaintsApi = async (params = {}) => {
   return await api.get('/admin/complaints', { params });
 };
+
+export const getAdminUsersApi = async (params = {}) => {
+  return await api.get('/admin/users', { params });
+};
+
+export const createAdminUserApi = async (payload) => {
+  return await api.post('/admin/users', payload);
+};
+
+export const deleteAdminUserApi = async (userId) => {
+  return await api.delete(`/admin/users/${userId}`);
+};
+

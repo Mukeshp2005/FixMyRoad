@@ -27,29 +27,33 @@ const MunicipalityComplaintDetailsPage = () => {
 
   const loadData = async () => {
     try {
-      setLoading(true);
-      setError('');
-
-      const [cRes, hRes, oRes] = await Promise.all([
-        getMunicipalityComplaintByIdApi(complaintId),
-        getComplaintHistoryApi(complaintId),
-        getMunicipalityOfficersApi(),
-      ]);
-
+      const cRes = await getMunicipalityComplaintByIdApi(complaintId);
       if (cRes.success && cRes.data?.complaint) {
         setComplaint(cRes.data.complaint);
         if (cRes.data.complaint.assignedTo?._id) {
           setSelectedOfficerId(cRes.data.complaint.assignedTo._id);
         }
       }
-      if (hRes.success && hRes.data?.history) {
-        setHistory(hRes.data.history);
+
+      try {
+        const hRes = await getComplaintHistoryApi(complaintId);
+        if (hRes && hRes.success && hRes.data?.history) {
+          setHistory(hRes.data.history);
+        }
+      } catch (hErr) {
+        console.warn('Complaint history notice:', hErr.message);
       }
-      if (oRes.success && oRes.data?.officers) {
-        setOfficers(oRes.data.officers);
+
+      try {
+        const oRes = await getMunicipalityOfficersApi();
+        if (oRes && oRes.success && oRes.data?.officers) {
+          setOfficers(oRes.data.officers);
+        }
+      } catch (officerErr) {
+        console.warn('Officers fetch notice:', officerErr.message);
       }
     } catch (err) {
-      setError(err.message || 'Failed to load complaint details. Access denied or tenant restriction enforced.');
+      setError(err.response?.data?.message || err.message || 'Failed to load complaint details.');
     } finally {
       setLoading(false);
     }
@@ -135,7 +139,7 @@ const MunicipalityComplaintDetailsPage = () => {
       <div className="py-12 px-4 max-w-xl mx-auto space-y-4 text-center">
         <div className="p-6 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 space-y-2">
           <AlertCircle className="w-8 h-8 mx-auto" />
-          <h2 className="text-base font-bold">Tenant Access Restricted</h2>
+          <h2 className="text-base font-bold">Unable to Load Complaint</h2>
           <p className="text-xs text-slate-300">{error || 'Complaint record not found.'}</p>
         </div>
         <Link

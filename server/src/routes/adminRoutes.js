@@ -1,5 +1,11 @@
 import express from 'express';
-import { getGlobalStats, getGlobalComplaints } from '../controllers/adminController.js';
+import {
+  getGlobalStats,
+  getGlobalComplaints,
+  getAllUsers,
+  createOfficialOrAdminUser,
+  deleteUser,
+} from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
 
@@ -21,4 +27,10 @@ router.get(
   getGlobalComplaints
 );
 
+// User Management Routes
+router.get('/users', authenticate, authorizeRoles('SUPER_ADMIN'), getAllUsers);
+router.post('/users', authenticate, authorizeRoles('SUPER_ADMIN'), createOfficialOrAdminUser);
+router.delete('/users/:userId', authenticate, authorizeRoles('SUPER_ADMIN'), deleteUser);
+
 export default router;
+

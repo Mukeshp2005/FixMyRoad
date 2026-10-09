@@ -2,13 +2,18 @@ import api from './api';
 
 /**
  * Uploads a road damage photo file to Express backend.
- * Express server validates, processes, and stores the image on Cloudinary before returning a secure URL.
- * @param {File} file - Selected image file object
+ * Handles both raw File object or FormData payload seamlessly.
+ * @param {File|FormData} fileOrFormData - Selected image file object or FormData
  * @returns {Promise<Object>} API response payload with secure imageUrl and metadata
  */
-export const uploadRoadImage = async (file) => {
-  const formData = new FormData();
-  formData.append('image', file);
+export const uploadRoadImage = async (fileOrFormData) => {
+  let formData;
+  if (fileOrFormData instanceof FormData) {
+    formData = fileOrFormData;
+  } else {
+    formData = new FormData();
+    formData.append('image', fileOrFormData);
+  }
 
   return await api.post('/uploads/road-image', formData, {
     headers: {

@@ -12,7 +12,11 @@ import { createMunicipalityOutboxEvents } from './notification/notificationServi
  * Allows new request if previous request was REJECTED, but blocks if PENDING or ACCEPTED for that cycle.
  */
 export const createReopenRequestWithTransaction = async ({ complaintIdParam, reason, imageUrl = null, user }) => {
-  const complaint = await Complaint.findOne({ complaintId: complaintIdParam });
+  const query = mongoose.isValidObjectId(complaintIdParam)
+    ? { $or: [{ _id: complaintIdParam }, { complaintId: complaintIdParam }] }
+    : { complaintId: complaintIdParam };
+
+  const complaint = await Complaint.findOne(query);
 
   if (!complaint) {
     const error = new Error('Complaint not found');
@@ -27,11 +31,11 @@ export const createReopenRequestWithTransaction = async ({ complaintIdParam, rea
     throw error;
   }
 
-  // 2. Status Check
-  if (complaint.status !== 'RESOLVED') {
-    const error = new Error(`Reopen requests can only be submitted for RESOLVED complaints (Current status: ${complaint.status})`);
+  // 2. Status Check (Allows RESOLVED or REJECTED for citizen dispute)
+  if (!['RESOLVED', 'REJECTED'].includes(complaint.status)) {
+    const error = new Error(`Reopen/dispute requests can only be submitted for RESOLVED or REJECTED complaints (Current status: ${complaint.status})`);
     error.statusCode = 400;
-    error.code = 'COMPLAINT_NOT_RESOLVED';
+    error.code = 'COMPLAINT_NOT_REOPENABLE';
     throw error;
   }
 

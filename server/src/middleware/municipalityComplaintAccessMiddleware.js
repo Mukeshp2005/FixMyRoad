@@ -1,8 +1,8 @@
+import mongoose from 'mongoose';
 import Complaint from '../models/Complaint.js';
 
 /**
- * Middleware ensuring strict tenant isolation for municipality complaints.
- * MUNICIPALITY_ADMIN and MUNICIPALITY_OFFICER can ONLY access complaints belonging to their assigned municipality.
+ * Middleware authorizing government officers to inspect and manage citizen complaints.
  */
 export const verifyMunicipalityComplaintAccess = async (req, res, next) => {
   try {
@@ -15,7 +15,11 @@ export const verifyMunicipalityComplaintAccess = async (req, res, next) => {
       });
     }
 
-    const complaint = await Complaint.findOne({ complaintId });
+    const query = mongoose.isValidObjectId(complaintId)
+      ? { $or: [{ _id: complaintId }, { complaintId }] }
+      : { complaintId };
+
+    const complaint = await Complaint.findOne(query);
 
     if (!complaint) {
       return res.status(404).json({
@@ -24,25 +28,8 @@ export const verifyMunicipalityComplaintAccess = async (req, res, next) => {
       });
     }
 
-    // SUPER_ADMIN has global system authorization
-    if (req.user.role === 'SUPER_ADMIN') {
-      req.complaint = complaint;
-      return next();
-    }
-
-    // MUNICIPALITY_ADMIN & MUNICIPALITY_OFFICER Tenant Isolation
-    if (req.user.role === 'MUNICIPALITY_ADMIN' || req.user.role === 'MUNICIPALITY_OFFICER') {
-      const adminMunId = req.user.municipalityId ? req.user.municipalityId.toString() : null;
-      const complaintMunId = complaint.municipalityId ? complaint.municipalityId.toString() : null;
-
-      if (!adminMunId || adminMunId !== complaintMunId) {
-        return res.status(403).json({
-          success: false,
-          code: 'TENANT_ACCESS_DENIED',
-          message: 'Access denied: You are not authorized to access complaints outside your assigned municipality.',
-        });
-      }
-
+    // SUPER_ADMIN, MUNICIPALITY_ADMIN, & MUNICIPALITY_OFFICER have full official inspection authorization
+    if (['SUPER_ADMIN', 'MUNICIPALITY_ADMIN', 'MUNICIPALITY_OFFICER'].includes(req.user.role)) {
       req.complaint = complaint;
       return next();
     }

@@ -38,6 +38,19 @@ const complaintSchema = new mongoose.Schema(
       min: 0,
       max: 1,
     },
+    isFakeImage: {
+      type: Boolean,
+      default: false,
+    },
+    geminiReasoning: {
+      type: String,
+      default: '',
+    },
+    verificationStatus: {
+      type: String,
+      enum: ['VERIFIED', 'FAKE_IMAGE', 'UNMATCHED_DESCRIPTION', 'PENDING'],
+      default: 'VERIFIED',
+    },
     severity: {
       type: String,
       enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
@@ -166,6 +179,10 @@ const complaintSchema = new mongoose.Schema(
       ref: 'User',
     }],
     resolutionComment: {
+      type: String,
+      default: '',
+    },
+    rejectionReason: {
       type: String,
       default: '',
     },

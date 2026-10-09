@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Building2, Calendar, MapPin, Sparkles, Clock, AlertCircle, Loader2, CheckCircle2, RotateCcw, Star } from 'lucide-react';
-import { getComplaintByIdApi, getComplaintHistoryApi } from '../../services/complaintService';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Building2, Calendar, MapPin, Sparkles, Clock, AlertCircle, Loader2, CheckCircle2, RotateCcw, Star, Pencil, Trash2 } from 'lucide-react';
+import { getComplaintByIdApi, getComplaintHistoryApi, updateComplaintApi, deleteComplaintApi } from '../../services/complaintService';
 import LocationMap from '../../components/location/LocationMap';
 import BoundingBoxOverlay from '../../components/ai/BoundingBoxOverlay';
 import ResolutionFeedbackCard from '../../components/citizen/ResolutionFeedbackCard';
@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 
 const ComplaintDetailsPage = () => {
   const { complaintId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [complaint, setComplaint] = useState(null);
@@ -18,6 +19,12 @@ const ComplaintDetailsPage = () => {
   const [error, setError] = useState('');
 
   const [isReopenModalOpen, setIsReopenModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDescription, setEditDescription] = useState('');
+  const [editTaluk, setEditTaluk] = useState('');
+  const [editZone, setEditZone] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadData = async () => {
     try {
@@ -31,6 +38,9 @@ const ComplaintDetailsPage = () => {
 
       if (cRes.success && cRes.data?.complaint) {
         setComplaint(cRes.data.complaint);
+        setEditDescription(cRes.data.complaint.description || '');
+        setEditTaluk(cRes.data.complaint.taluk || '');
+        setEditZone(cRes.data.complaint.zone || '');
       }
       if (hRes.success && hRes.data?.history) {
         setHistory(hRes.data.history);
@@ -39,6 +49,44 @@ const ComplaintDetailsPage = () => {
       setError(err.message || 'Failed to load complaint details.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    try {
+      setIsUpdating(true);
+      const res = await updateComplaintApi(complaintId, {
+        description: editDescription,
+        taluk: editTaluk,
+        zone: editZone,
+      });
+      if (res.success) {
+        setIsEditing(false);
+        loadData();
+      } else {
+        alert(res.message || 'Failed to update complaint');
+      }
+    } catch (err) {
+      alert(err.message || 'Error updating complaint');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this complaint? This action cannot be undone.')) return;
+    try {
+      setIsDeleting(true);
+      const res = await deleteComplaintApi(complaintId);
+      if (res.success) {
+        navigate('/citizen/dashboard');
+      } else {
+        alert(res.message || 'Failed to delete complaint');
+      }
+    } catch (err) {
+      alert(err.message || 'Error deleting complaint');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -143,13 +191,95 @@ const ComplaintDetailsPage = () => {
           </div>
         </div>
 
-        {complaint.citizenVerified && (
-          <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Citizen Verified ({complaint.citizenRating} ★)</span>
-          </div>
-        )}
+        <div className="flex items-center space-x-3">
+          {isOwner && !['RESOLVED', 'CLOSED', 'REJECTED'].includes(complaint.status) && (
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setIsEditing(!isEditing)}
+                className="px-3 py-1.5 rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/30 text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>{isEditing ? 'Cancel Edit' : 'Edit Report'}</span>
+              </button>
+
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="px-3 py-1.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400 hover:bg-rose-500/30 text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                <span>Delete</span>
+              </button>
+            </div>
+          )}
+
+          {complaint.citizenVerified && (
+            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Citizen Verified ({complaint.citizenRating} ★)</span>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Inline Edit Form Panel */}
+      {isEditing && (
+        <div className="glass-panel p-6 rounded-2xl border border-cyan-500/40 bg-cyan-950/20 space-y-4">
+          <h3 className="text-sm font-bold text-cyan-400 flex items-center space-x-2">
+            <Pencil className="w-4 h-4" />
+            <span>Edit Complaint Details</span>
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-1">
+              <label className="text-slate-300 font-semibold">Taluk</label>
+              <input
+                type="text"
+                value={editTaluk}
+                onChange={(e) => setEditTaluk(e.target.value)}
+                className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-medium focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-slate-300 font-semibold">Zone / Ward</label>
+              <input
+                type="text"
+                value={editZone}
+                onChange={(e) => setEditZone(e.target.value)}
+                className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-medium focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div className="sm:col-span-2 space-y-1">
+              <label className="text-slate-300 font-semibold">Description</label>
+              <textarea
+                rows={3}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-medium focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-2">
+            <button
+              onClick={() => setIsEditing(false)}
+              className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleUpdate}
+              disabled={isUpdating}
+              className="px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs hover:bg-cyan-400 flex items-center space-x-1.5 disabled:opacity-50"
+            >
+              {isUpdating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>Save Changes</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -173,13 +303,15 @@ const ComplaintDetailsPage = () => {
           <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-4">
             <h2 className="text-sm font-bold text-white flex items-center space-x-2">
               <Sparkles className="w-4 h-4 text-purple-400" />
-              <span>YOLO AI Road Damage Analysis</span>
+              <span>Gemini Vision AI Image & Description Verification</span>
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
-                <span className="text-slate-400 font-semibold block">Primary Defect</span>
-                <p className="text-white font-extrabold text-sm">{complaint.issueType}</p>
+                <span className="text-slate-400 font-semibold block">Verification Status</span>
+                <p className={`font-extrabold text-sm ${complaint.isFakeImage ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  {complaint.isFakeImage ? '⚠️ FAKE / UNMATCHED IMAGE' : '✓ VERIFIED REAL CIVIC DEFECT'}
+                </p>
               </div>
 
               <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
@@ -190,14 +322,24 @@ const ComplaintDetailsPage = () => {
               </div>
 
               <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
-                <span className="text-slate-400 font-semibold block">Report Count</span>
-                <p className="text-white font-extrabold text-sm">{complaint.reportCount || 1}</p>
+                <span className="text-slate-400 font-semibold block">Defect Type</span>
+                <p className="text-white font-extrabold text-sm">{complaint.issueType}</p>
               </div>
             </div>
 
+            {complaint.geminiReasoning && (
+              <div className="p-3.5 rounded-xl bg-purple-950/20 border border-purple-500/30 text-xs space-y-1">
+                <span className="font-semibold text-purple-300 flex items-center space-x-1 block">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400 inline mr-1" />
+                  <span>Gemini AI Reasoning:</span>
+                </span>
+                <p className="text-slate-300 font-medium">{complaint.geminiReasoning}</p>
+              </div>
+            )}
+
             {complaint.description && (
               <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 text-xs space-y-1">
-                <span className="font-semibold text-slate-300 block">Your Description:</span>
+                <span className="font-semibold text-slate-300 block">Citizen Description:</span>
                 <p className="text-slate-400 italic">"{complaint.description}"</p>
               </div>
             )}
@@ -282,6 +424,40 @@ const ComplaintDetailsPage = () => {
                       <span>Request Reopening</span>
                     </button>
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Rejection Notice & Dispute / Appeal Section */}
+          {complaint.status === 'REJECTED' && (
+            <div className="glass-panel p-6 rounded-2xl border border-rose-500/40 bg-rose-950/20 space-y-4">
+              <h2 className="text-sm font-bold text-white flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-400" />
+                <span>Official Rejection Notice</span>
+              </h2>
+
+              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 text-xs space-y-1">
+                <span className="text-rose-400 font-semibold block uppercase tracking-wider">Officer Rejection Reason:</span>
+                <p className="text-rose-200 font-medium text-sm">
+                  "{complaint.rejectionReason || complaint.resolutionComment || 'Complaint was rejected by municipal officer.'}"
+                </p>
+              </div>
+
+              {isOwner && (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2 border-t border-rose-900/40">
+                  <div className="text-xs">
+                    <p className="font-bold text-white">Dispute this Rejection?</p>
+                    <p className="text-slate-400 text-[11px]">Submit an appeal to escalate this complaint to Senior Zone Authorities.</p>
+                  </div>
+
+                  <button
+                    onClick={() => setIsReopenModalOpen(true)}
+                    className="px-4 py-2 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500/30 font-bold text-xs transition-all shrink-0 flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Dispute Rejection & Appeal</span>
+                  </button>
                 </div>
               )}
             </div>

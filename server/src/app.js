@@ -3,6 +3,17 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 
+// Register all Mongoose models globally to prevent MissingSchemaError during populate
+import './models/User.js';
+import './models/Municipality.js';
+import './models/HierarchyLevel.js';
+import './models/Department.js';
+import './models/Complaint.js';
+import './models/ComplaintHistory.js';
+import './models/AuditLog.js';
+import './models/ReopenRequest.js';
+import './models/Notification.js';
+
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { securityHeadersMiddleware } from './middleware/securityHeaders.js';
 import { performanceMiddleware } from './middleware/performanceMiddleware.js';

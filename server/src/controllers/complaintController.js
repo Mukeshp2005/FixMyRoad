@@ -1,4 +1,6 @@
 import axios from 'axios';
+import mongoose from 'mongoose';
+import Complaint from '../models/Complaint.js';
 import { validateImageUrlSSRF, analyzeRoadImageWithAI } from '../services/aiService.js';
 import { reverseGeocode } from '../services/geocodingService.js';
 import { findMunicipalityByCoordinates } from '../services/municipalityService.js';
@@ -16,7 +18,7 @@ import {
  */
 export const createComplaint = async (req, res, next) => {
   try {
-    const { imageUrl, description, location } = req.body;
+    const { imageUrl, description, location, departmentName, taluk, zone } = req.body;
 
     // 1. Basic Payload Validation
     if (!imageUrl) {
@@ -88,27 +90,31 @@ export const createComplaint = async (req, res, next) => {
 
     const resolvedMunicipality = munResult.data.municipality;
 
-    // 5. Server-Side AI Analysis Execution
+    // 5. Sanitize Description & Execute Gemini AI Image Analysis
+    const sanitizedDescription = description && typeof description === 'string'
+      ? description.trim().substring(0, 1000)
+      : '';
+
     const allowAiUnavailable = process.env.ALLOW_AI_UNAVAILABLE_SUBMISSION === 'true';
     let aiResult;
 
     try {
-      aiResult = await analyzeRoadImageWithAI(imageUrl);
+      aiResult = await analyzeRoadImageWithAI(imageUrl, sanitizedDescription);
     } catch (aiErr) {
       if (!allowAiUnavailable) {
         return res.status(503).json({
           success: false,
           code: 'AI_UNAVAILABLE',
-          message: 'Road damage AI analysis service is currently unavailable. Please try again later.',
+          message: 'Gemini AI image analysis service is currently unavailable. Please try again later.',
         });
       }
     }
 
-    if (aiResult && aiResult.modelLoaded === false && !allowAiUnavailable) {
+    if (aiResult && aiResult.isFakeImage) {
       return res.status(400).json({
         success: false,
-        code: 'AI_UNAVAILABLE',
-        message: 'Road damage AI model is not configured. Submission is disallowed until AI model is active.',
+        code: 'FAKE_IMAGE_REJECTED',
+        message: `Gemini AI Verification Failed: ${aiResult.aiReasoning || 'Uploaded image does not appear to be a legitimate civic defect matching your description.'}`,
       });
     }
 
@@ -120,12 +126,7 @@ export const createComplaint = async (req, res, next) => {
     // 6. Citizen ID derived strictly from req.user._id
     const citizenId = req.user._id;
 
-    // 7. Sanitize Description
-    const sanitizedDescription = description && typeof description === 'string'
-      ? description.trim().substring(0, 1000)
-      : '';
-
-    // 8. Assemble Server-Validated Complaint Payload
+    // 7. Assemble Server-Validated Complaint Payload
     const complaintPayload = {
       citizenId,
       imageUrl,
@@ -133,6 +134,12 @@ export const createComplaint = async (req, res, next) => {
       aiConfidence,
       severity,
       description: sanitizedDescription,
+      departmentName: departmentName || 'ROADS_PWD',
+      taluk: taluk || '',
+      zone: zone || '',
+      isFakeImage: Boolean(aiResult?.isFakeImage),
+      geminiReasoning: aiResult?.aiReasoning || '',
+      verificationStatus: aiResult?.verificationStatus || 'VERIFIED',
       location: {
         type: 'Point',
         coordinates: [longitude, latitude],
@@ -145,7 +152,7 @@ export const createComplaint = async (req, res, next) => {
       state: addressData.state || '',
       country: addressData.country || '',
       postalCode: addressData.postalCode || '',
-      municipalityId: resolvedMunicipality.id,
+      municipalityId: resolvedMunicipality.id || resolvedMunicipality._id,
     };
 
     // 9. Execute Complaint Creation Transaction
@@ -235,6 +242,118 @@ export const getComplaintHistory = async (req, res, next) => {
         message: error.message,
       });
     }
+    next(error);
+  }
+};
+
+/**
+ * @desc    Update citizen complaint (description, department, taluk, zone)
+ * @route   PUT /api/complaints/:complaintId
+ * @access  Private (CITIZEN role, owner only)
+ */
+export const updateCitizenComplaint = async (req, res, next) => {
+  try {
+    const { complaintId } = req.params;
+    const { description, departmentName, taluk, zone } = req.body;
+
+    const query = mongoose.isValidObjectId(complaintId)
+      ? { $or: [{ _id: complaintId }, { complaintId }] }
+      : { complaintId };
+
+    const complaint = await Complaint.findOne(query);
+    if (!complaint) {
+      return res.status(404).json({ success: false, message: 'Complaint not found' });
+    }
+
+    if (complaint.citizenId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to edit this complaint' });
+    }
+
+    if (['RESOLVED', 'CLOSED', 'REJECTED'].includes(complaint.status)) {
+      return res.status(400).json({ success: false, message: 'Cannot edit a finalized complaint' });
+    }
+
+    if (description !== undefined) complaint.description = description;
+    if (departmentName !== undefined) complaint.departmentName = departmentName;
+    if (taluk !== undefined) complaint.taluk = taluk;
+    if (zone !== undefined) complaint.zone = zone;
+
+    await complaint.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Complaint updated successfully',
+      data: { complaint },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Delete citizen complaint
+ * @route   DELETE /api/complaints/:complaintId
+ * @access  Private (CITIZEN role, owner only)
+ */
+export const deleteCitizenComplaint = async (req, res, next) => {
+  try {
+    const { complaintId } = req.params;
+
+    const query = mongoose.isValidObjectId(complaintId)
+      ? { $or: [{ _id: complaintId }, { complaintId }] }
+      : { complaintId };
+
+    const complaint = await Complaint.findOne(query);
+    if (!complaint) {
+      return res.status(404).json({ success: false, message: 'Complaint not found' });
+    }
+
+    if (complaint.citizenId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to delete this complaint' });
+    }
+
+    if (['RESOLVED', 'CLOSED', 'REJECTED'].includes(complaint.status)) {
+      return res.status(400).json({ success: false, message: 'Cannot delete a finalized complaint' });
+    }
+
+    await Complaint.findOneAndDelete(query);
+
+    res.status(200).json({
+      success: true,
+      message: 'Complaint deleted successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Verify image and description match with Gemini AI pre-submission
+ * @route   POST /api/complaints/verify-image
+ * @access  Private (CITIZEN role)
+ */
+export const verifyImageAndDescription = async (req, res, next) => {
+  try {
+    const { imageUrl, description } = req.body;
+
+    if (!imageUrl) {
+      return res.status(400).json({ success: false, message: 'Image URL is required' });
+    }
+
+    const aiResult = await analyzeRoadImageWithAI(imageUrl, description || '');
+
+    res.status(200).json({
+      success: true,
+      data: {
+        isFakeImage: Boolean(aiResult.isFakeImage),
+        isValidRoad: Boolean(aiResult.isValidRoad),
+        verificationStatus: aiResult.verificationStatus,
+        aiReasoning: aiResult.aiReasoning,
+        primaryIssue: aiResult.primaryIssue,
+        confidence: aiResult.overallConfidence,
+      },
+    });
+  } catch (error) {
     next(error);
   }
 };
