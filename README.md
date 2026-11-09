@@ -2,6 +2,14 @@
 
 This repository contains the full source code for **FixMyRoad** - an automated, AI-assisted civic infrastructure & complaint management platform built with Node.js, Express, React (Vite), MongoDB, and Google Gemini Vision AI.
 
+> 🌐 **Live Production Deployments:**
+> - **Frontend (Vercel):** [https://fix-my-road-six.vercel.app](https://fix-my-road-six.vercel.app)
+> - **Backend API (Render):** [https://fixmyroad-os0u.onrender.com/api](https://fixmyroad-os0u.onrender.com/api)
+>
+> 📚 **Team Documentation & Study Guides:**
+> - 📄 **[Project Architecture & File Connections Guide](file:///d:/FixMyRoad/-FixMyRoad/PROJECT_ARCHITECTURE_AND_FLOW.md)**: Full breakdown of every directory, file connections, active vs legacy files, and data workflows.
+> - 🤖 **[Team AI Study & Viva Preparation Guide](file:///d:/FixMyRoad/-FixMyRoad/AI_PROJECT_STUDY_GUIDE.md)**: Specially designed guide to feed into ChatGPT / Claude / Gemini to study the project, prepare for viva, and understand how every feature works.
+
 ---
 
 ## 🛠️ Quick Start (Running on Any Device)
