@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { User, LogOut, LayoutDashboard, LogIn, UserPlus, Bell, ShieldCheck } from 'lucide-react';
+import { User, LogOut, LayoutDashboard, LogIn, UserPlus, Bell, ShieldCheck, KeyRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getMyNotificationsApi, markNotificationReadApi } from '../services/notificationService';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 
 const MainLayout = () => {
   const { user, isAuthenticated, logout } = useAuth();
@@ -10,6 +11,7 @@ const MainLayout = () => {
 
   const [notifications, setNotifications] = useState([]);
   const [showBellDropdown, setShowBellDropdown] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   const fetchNotifications = async () => {
@@ -72,7 +74,7 @@ const MainLayout = () => {
   const getDashboardPath = () => {
     if (!user) return '/';
     if (user.role === 'SUPER_ADMIN') return '/admin/dashboard';
-    if (user.role === 'MUNICIPALITY_ADMIN') return '/municipality/dashboard';
+    if (user.role === 'MUNICIPALITY_ADMIN' || user.role === 'MUNICIPALITY_OFFICER') return '/municipality/dashboard';
     return '/citizen/dashboard';
   };
 
@@ -106,7 +108,7 @@ const MainLayout = () => {
             </Link>
 
             {isAuthenticated ? (
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-3 sm:space-x-4">
                 {/* Notification Bell Dropdown */}
                 <div className="relative" ref={dropdownRef}>
                   <button
@@ -176,6 +178,18 @@ const MainLayout = () => {
                   </span>
                 </div>
 
+                {/* Change Password Button */}
+                <button
+                  type="button"
+                  id="btn-nav-change-password"
+                  onClick={() => setIsChangePasswordOpen(true)}
+                  className="flex items-center space-x-1.5 text-xs font-semibold text-slate-700 hover:text-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer"
+                  title="Change Password"
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-slate-600" />
+                  <span className="hidden md:inline">Password</span>
+                </button>
+
                 <button
                   id="btn-nav-logout"
                   onClick={handleLogout}
@@ -212,6 +226,12 @@ const MainLayout = () => {
       <main className="flex-1">
         <Outlet />
       </main>
+
+      {/* Change Password Modal for Authenticated User */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+      />
 
       {/* Footer — Professional Municipal Portal Footer */}
       <footer className="border-t border-slate-200 bg-white py-8">

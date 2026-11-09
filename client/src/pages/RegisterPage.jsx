@@ -106,7 +106,14 @@ const RegisterPage = () => {
       if (result.success) {
         setRegisteredEmail(formData.email);
         setDevOTP(result.devOTP || '');
-        setInfoMessage(`A 6-digit verification code has been dispatched to ${formData.email}.`);
+        if (result.emailDispatched) {
+          setInfoMessage(`A 6-digit verification code has been dispatched to ${formData.email}.`);
+        } else if (result.emailError) {
+          setErrorMessage(`Email notice: Mail server reported "${result.emailError}". Please verify SMTP configuration for production.`);
+          setInfoMessage(`Verification code generated for ${formData.email}.`);
+        } else {
+          setInfoMessage(`A 6-digit verification code has been generated for ${formData.email}.`);
+        }
         setStep('OTP');
       } else {
         setErrorMessage(result.error || 'Registration failed');
@@ -147,7 +154,14 @@ const RegisterPage = () => {
     const res = await resendOTP(registeredEmail);
     if (res.success) {
       if (res.devOTP) setDevOTP(res.devOTP);
-      setInfoMessage('A new OTP code has been dispatched to your email.');
+      if (res.emailDispatched) {
+        setInfoMessage('A fresh OTP code has been dispatched to your email inbox.');
+      } else if (res.emailError) {
+        setErrorMessage(`Email notice: Mail server reported "${res.emailError}".`);
+        setInfoMessage('A new verification code has been generated.');
+      } else {
+        setInfoMessage('A new OTP code has been generated.');
+      }
     } else {
       setErrorMessage(res.error || 'Failed to resend OTP.');
     }
@@ -183,6 +197,8 @@ const RegisterPage = () => {
             </div>
           )}
 
+
+
           <form onSubmit={handleVerifyOTP} className="space-y-4">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-700 mb-1.5 text-center">
@@ -191,10 +207,12 @@ const RegisterPage = () => {
               <input
                 id="otp-code-input"
                 type="text"
+                inputMode="numeric"
                 maxLength={6}
                 value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 placeholder="123456"
+                autoComplete="one-time-code"
                 required
                 className="w-full bg-[#f9f8f6] border border-[#e5e5e0] focus:bg-white focus:border-neutral-900 py-3 text-center text-lg tracking-[0.4em] font-mono text-neutral-900 outline-none transition-all"
               />

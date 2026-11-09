@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
-import { Camera, FileText, CheckCircle, Clock, AlertTriangle, RefreshCw, ChevronRight, MapPin, Building2, Calendar } from 'lucide-react';
+import { Camera, FileText, CheckCircle, Clock, AlertTriangle, RefreshCw, ChevronRight, MapPin, Building2, Calendar, KeyRound } from 'lucide-react';
 import { getMyComplaintsApi } from '../services/complaintService';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 
 const CitizenDashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState({ total: 0, inProgress: 0, resolved: 0, submitted: 0, rejected: 0 });
   const [recentComplaints, setRecentComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   const loadDashboard = async () => {
     try {
@@ -94,6 +96,15 @@ const CitizenDashboard = () => {
               title="Refresh"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsChangePasswordOpen(true)}
+              className="px-3 py-2.5 border border-[#e5e5e0] hover:border-neutral-900 text-neutral-800 transition-all cursor-pointer bg-white text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5"
+              title="Change Password"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Change Password</span>
             </button>
             <Link
               id="link-new-report"
@@ -309,6 +320,12 @@ const CitizenDashboard = () => {
           Unresolved complaints automatically escalate through the hierarchy every 2 minutes during this live demo.
         </p>
       </div>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+      />
     </div>
   );
 };

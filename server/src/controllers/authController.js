@@ -1,10 +1,13 @@
 import { 
   registerUser, 
   authenticateUser, 
-  verifyEmailOTP,
-  resendVerificationOTP,
+  verifyEmailOTP, 
+  resendVerificationOTP, 
   sendTokenResponse, 
-  sanitizeUser 
+  sanitizeUser,
+  requestPasswordReset,
+  resetUserPassword,
+  changeUserPassword
 } from '../services/authService.js';
 import { 
   validateRegisterInput, 
@@ -31,13 +34,18 @@ export const register = async (req, res, next) => {
     }
 
     // Register user service (Forces role = CITIZEN and generates OTP)
-    const { user, rawOTP } = await registerUser({ name, email, password, phone });
+    const { user, rawOTP, emailDispatched, emailError } = await registerUser({ name, email, password, phone });
 
     res.status(201).json({
       success: true,
       requiresVerification: true,
-      message: 'Registration successful! A 6-digit OTP has been dispatched to your email.',
+      message: emailDispatched
+        ? 'Registration successful! A 6-digit OTP has been dispatched to your email.'
+        : 'Registration successful! Verification code generated.',
       email: user.email,
+      emailDispatched,
+      emailError,
+      devOTP: process.env.NODE_ENV !== 'production' ? rawOTP : undefined,
     });
   } catch (error) {
     next(error);
@@ -81,10 +89,95 @@ export const resendOTP = async (req, res, next) => {
       });
     }
 
-    await resendVerificationOTP(email);
+    const result = await resendVerificationOTP(email);
     res.status(200).json({
       success: true,
-      message: 'A new 6-digit OTP has been sent to your email.',
+      message: result.emailDispatched
+        ? 'A new 6-digit OTP has been sent to your email.'
+        : 'A new 6-digit OTP has been generated.',
+      emailDispatched: result.emailDispatched,
+      emailError: result.emailError,
+      devOTP: process.env.NODE_ENV !== 'production' ? result.rawOTP : undefined,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Forgot Password Request — sends 6-digit OTP to user's email
+ * @route   POST /api/auth/forgot-password
+ * @access  Public
+ */
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address.',
+      });
+    }
+
+    const result = await requestPasswordReset(email);
+    res.status(200).json({
+      success: true,
+      message: result.emailDispatched
+        ? 'A 6-digit password reset code has been sent to your email.'
+        : 'A 6-digit password reset code has been generated.',
+      email: result.email,
+      emailDispatched: result.emailDispatched,
+      emailError: result.emailError,
+      devOTP: process.env.NODE_ENV !== 'production' ? result.rawOTP : undefined,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Reset Password with verified 6-digit OTP
+ * @route   POST /api/auth/reset-password
+ * @access  Public
+ */
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { email, otp, newPassword, confirmPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, OTP code, and new password are required.',
+      });
+    }
+
+    const result = await resetUserPassword({ email, otp, newPassword, confirmPassword });
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Change password for authenticated user
+ * @route   POST /api/auth/change-password
+ * @access  Private (Authenticated)
+ */
+export const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    const result = await changeUserPassword({
+      userId: req.user._id,
+      currentPassword,
+      newPassword,
+      confirmPassword,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
     });
   } catch (error) {
     next(error);

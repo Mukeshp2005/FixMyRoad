@@ -17,7 +17,8 @@ import {
   ArrowLeft,
   Users,
   Landmark,
-  ChevronRight
+  ChevronRight,
+  KeyRound
 } from 'lucide-react';
 
 const ROLES = [
@@ -115,25 +116,18 @@ const LoginPage = () => {
 
     try {
       setIsSubmitting(true);
-      const result = await login(formData.email, formData.password);
+
+      const roleMapping = {
+        citizen: ['CITIZEN'],
+        govt: ['MUNICIPALITY_ADMIN', 'MUNICIPALITY_OFFICER'],
+        admin: ['SUPER_ADMIN'],
+      };
+      const allowedRoles = roleMapping[selectedRole] || [];
+
+      const result = await login(formData.email, formData.password, allowedRoles);
 
       if (result.success) {
         const role = result.user.role;
-        
-        // Validate that the user's actual role matches the portal they're trying to log into
-        const roleMapping = {
-          citizen: ['CITIZEN'],
-          govt: ['MUNICIPALITY_ADMIN', 'MUNICIPALITY_OFFICER'],
-          admin: ['SUPER_ADMIN'],
-        };
-
-        const allowedRoles = roleMapping[selectedRole] || [];
-        if (!allowedRoles.includes(role)) {
-          setErrorMessage(`Access denied. Your account is not registered as a ${ROLES.find(r => r.key === selectedRole)?.label}. Please select the correct portal.`);
-          setIsSubmitting(false);
-          return;
-        }
-
         if (from) {
           navigate(from, { replace: true });
         } else if (role === 'SUPER_ADMIN') {
@@ -375,9 +369,17 @@ const LoginPage = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-700 mb-1.5">
-                  Password
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-700">
+                    Password
+                  </label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-[11px] text-neutral-500 hover:text-neutral-900 underline font-light"
+                  >
+                    Forgot Password?
+                  </Link>
+                </div>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
                   <input
@@ -415,11 +417,17 @@ const LoginPage = () => {
 
             {/* Only Citizens can register themselves */}
             {selectedRole === 'citizen' && (
-              <div className="text-center pt-4 border-t border-[#e5e5e0]">
+              <div className="text-center pt-4 border-t border-[#e5e5e0] space-y-2">
                 <p className="text-xs text-neutral-500 font-light">
                   Don't have an account?{' '}
                   <Link to="/register" className="font-semibold text-neutral-900 hover:underline ml-1">
                     Create Account →
+                  </Link>
+                </p>
+                <p className="text-[11px] text-neutral-500 font-light">
+                  Trouble signing in?{' '}
+                  <Link to="/forgot-password" className="font-semibold text-neutral-800 hover:underline">
+                    Reset Password
                   </Link>
                 </p>
               </div>

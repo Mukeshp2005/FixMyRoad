@@ -111,15 +111,15 @@ const ReportIssuePage = () => {
 
     if (!file) return;
 
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!validTypes.includes(file.type.toLowerCase())) {
-      setErrorMessage('Please upload a JPG, PNG, or WEBP image.');
+    const isImage = (file.type && file.type.startsWith('image/')) || /\.(jpe?g|png|webp|heic|heif|avif|tiff|bmp|gif)$/i.test(file.name);
+    if (!isImage) {
+      setErrorMessage('Please upload a valid image file (JPG, PNG, WEBP, etc.).');
       return;
     }
 
-    const maxSize = 10 * 1024 * 1024;
+    const maxSize = 25 * 1024 * 1024;
     if (file.size > maxSize) {
-      setErrorMessage('Image size exceeds 10 MB limit. Please select a smaller file.');
+      setErrorMessage('Image size exceeds 25 MB limit. Please select a smaller file.');
       return;
     }
 

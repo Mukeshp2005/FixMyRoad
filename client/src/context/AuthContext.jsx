@@ -1,5 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { registerApi, loginApi, verifyOTPApi, resendOTPApi, logoutApi, getMeApi } from '../services/authService';
+import { 
+  registerApi, 
+  loginApi, 
+  verifyOTPApi, 
+  resendOTPApi, 
+  forgotPasswordApi,
+  resetPasswordApi,
+  changePasswordApi,
+  logoutApi, 
+  getMeApi 
+} from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -37,7 +47,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Login handler — accepts identifier (email or username) & password
-  const login = async (identifierOrEmail, password) => {
+  const login = async (identifierOrEmail, password, allowedRoles = null) => {
     setError(null);
     try {
       const credentials = typeof identifierOrEmail === 'object'
@@ -46,11 +56,24 @@ export const AuthProvider = ({ children }) => {
         
       const response = await loginApi(credentials);
       if (response.success && response.data?.user) {
+        const authenticatedUser = response.data.user;
+
+        // Strict portal role validation: prevent setting user/token if portal role mismatches
+        if (allowedRoles && Array.isArray(allowedRoles) && !allowedRoles.includes(authenticatedUser.role)) {
+          const roleLabel = authenticatedUser.role.replace(/_/g, ' ');
+          return {
+            success: false,
+            roleMismatch: true,
+            userRole: authenticatedUser.role,
+            error: `Access Denied: Your account (${roleLabel}) is not authorized for this portal. Please select the correct portal.`,
+          };
+        }
+
         if (response.token) {
           localStorage.setItem('token', response.token);
         }
-        setUser(response.data.user);
-        return { success: true, user: response.data.user };
+        setUser(authenticatedUser);
+        return { success: true, user: authenticatedUser };
       }
       throw new Error(response.message || 'Login failed');
     } catch (err) {
@@ -63,7 +86,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Register handler — returns verification status and devOTP snippet
+  // Register handler — returns verification status, email dispatch status, and devOTP snippet
   const register = async (name, email, password, confirmPassword, phone) => {
     setError(null);
     try {
@@ -73,6 +96,8 @@ export const AuthProvider = ({ children }) => {
           success: true, 
           requiresVerification: response.requiresVerification, 
           email: response.email,
+          emailDispatched: response.emailDispatched,
+          emailError: response.emailError,
           devOTP: response.devOTP
         };
       }
@@ -108,9 +133,52 @@ export const AuthProvider = ({ children }) => {
   const resendOTP = async (email) => {
     try {
       const response = await resendOTPApi({ email });
-      return { success: response.success, message: response.message, devOTP: response.devOTP };
+      return { 
+        success: response.success, 
+        message: response.message, 
+        emailDispatched: response.emailDispatched,
+        emailError: response.emailError,
+        devOTP: response.devOTP 
+      };
     } catch (err) {
       return { success: false, error: err.message || 'Failed to resend OTP' };
+    }
+  };
+
+  // Forgot Password handler — initiates reset request
+  const forgotPassword = async (email) => {
+    try {
+      const response = await forgotPasswordApi({ email });
+      return { 
+        success: response.success, 
+        message: response.message, 
+        email: response.email, 
+        emailDispatched: response.emailDispatched,
+        emailError: response.emailError,
+        devOTP: response.devOTP 
+      };
+    } catch (err) {
+      return { success: false, error: err.message || 'Failed to request password reset' };
+    }
+  };
+
+  // Reset Password handler — sets new password using OTP
+  const resetPassword = async (email, otp, newPassword, confirmPassword) => {
+    try {
+      const response = await resetPasswordApi({ email, otp, newPassword, confirmPassword });
+      return { success: response.success, message: response.message };
+    } catch (err) {
+      return { success: false, error: err.message || 'Failed to reset password' };
+    }
+  };
+
+  // Change Password handler for authenticated user
+  const changePassword = async (currentPassword, newPassword, confirmPassword) => {
+    try {
+      const response = await changePasswordApi({ currentPassword, newPassword, confirmPassword });
+      return { success: response.success, message: response.message };
+    } catch (err) {
+      return { success: false, error: err.message || 'Failed to change password' };
     }
   };
 
@@ -137,6 +205,9 @@ export const AuthProvider = ({ children }) => {
         register,
         verifyOTP,
         resendOTP,
+        forgotPassword,
+        resetPassword,
+        changePassword,
         logout,
         checkAuthStatus,
       }}

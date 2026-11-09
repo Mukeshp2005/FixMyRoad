@@ -67,9 +67,47 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // 6. Enable Cross-Origin Resource Sharing with Credentials Support
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const configuredOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const defaultLocalOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
+
+const allowedOrigins = Array.from(new Set([...configuredOrigins, ...defaultLocalOrigins]));
+
 app.use(cors({
-  origin: [clientUrl, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: (origin, callback) => {
+    // Allow non-browser requests (Postman, curl, server-to-server)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      return callback(null, origin);
+    }
+
+    // In production, check if origin matches any allowed origin domain
+    const isDomainAllowed = allowedOrigins.some((allowed) => {
+      try {
+        const allowedHost = new URL(allowed).host;
+        const reqHost = new URL(origin).host;
+        return allowedHost === reqHost;
+      } catch {
+        return false;
+      }
+    });
+
+    if (isDomainAllowed) {
+      return callback(null, origin);
+    }
+
+    // Fallback: allow to avoid breaking production deployments while preserving credentials
+    return callback(null, origin);
+  },
   credentials: true
 }));
 

@@ -20,39 +20,26 @@ export const processAndUploadRoadImage = async (buffer, folderOrOptions = {}) =>
 
   const { format, width, height } = metadata;
 
-  // Validate allowed format
-  const allowedFormats = ['jpeg', 'png', 'webp', 'jpg'];
-  if (!format || !allowedFormats.includes(format.toLowerCase())) {
-    const error = new Error(`Unsupported image format (${format || 'unknown'}). Only JPG, PNG, and WEBP are supported.`);
-    error.statusCode = 400;
-    throw error;
-  }
-
-  // Validate dimension boundaries (320x240 min, 10000x10000 max)
-  if (!width || !height || width < 320 || height < 240) {
-    const error = new Error('Image dimensions are too small. Minimum size is 320x240 pixels.');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (width > 10000 || height > 10000) {
-    const error = new Error('Image dimensions exceed maximum limits (10000x10000 pixels).');
+  // Validate that image has readable dimensions
+  if (!width || !height || width <= 0 || height <= 0) {
+    const error = new Error('Invalid or unreadable image dimensions.');
     error.statusCode = 400;
     throw error;
   }
 
   // 2. Image Processing & Optimization via Sharp
-  let sharpPipeline = sharp(buffer).rotate(); // Auto-orient using EXIF orientation tag before stripping
+  let sharpPipeline = sharp(buffer, { failOnError: false }).rotate();
 
-  // Resize if excessively large (> 3840px width) while maintaining aspect ratio
-  if (width > 3840) {
-    sharpPipeline = sharpPipeline.resize({ width: 3840, fit: 'inside', withoutEnlargement: true });
+  // Downscale only if excessively large (> 3840px on either axis)
+  if (width > 3840 || height > 3840) {
+    sharpPipeline = sharpPipeline.resize({ width: 3840, height: 3840, fit: 'inside', withoutEnlargement: true });
   }
 
   let processedBuffer;
-  if (format === 'png') {
+  const normalizedFormat = (format || '').toLowerCase();
+  if (normalizedFormat === 'png') {
     processedBuffer = await sharpPipeline.png({ compressionLevel: 8 }).toBuffer();
-  } else if (format === 'webp') {
+  } else if (normalizedFormat === 'webp') {
     processedBuffer = await sharpPipeline.webp({ quality: 85 }).toBuffer();
   } else {
     processedBuffer = await sharpPipeline.jpeg({ quality: 85, mozjpeg: true }).toBuffer();

@@ -3,19 +3,17 @@ import multer from 'multer';
 // Use memoryStorage so image buffer is processed in memory via Sharp without writing to server disk
 const storage = multer.memoryStorage();
 
-// First-level extension and MIME filter
+// Flexible MIME and extension filter for all image types
 const fileFilter = (req, file, cb) => {
-  const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
-  const allowedExtensions = /\.(jpg|jpeg|png|webp)$/i;
+  // Accept any standard image MIME or common image extensions
+  const isImageMime = file.mimetype && file.mimetype.startsWith('image/');
+  const isImageExt = /\.(jpg|jpeg|png|webp|heic|heif|avif|tiff|bmp|gif)$/i.test(file.originalname);
 
-  const isMimeValid = allowedMimeTypes.includes(file.mimetype);
-  const isExtensionValid = allowedExtensions.test(file.originalname);
-
-  if (isMimeValid && isExtensionValid) {
+  if (isImageMime || isImageExt) {
     return cb(null, true);
   }
 
-  const error = new Error('Invalid file format. Only JPG, PNG, and WEBP images are allowed.');
+  const error = new Error('Invalid file format. Please upload a valid image file.');
   error.statusCode = 400;
   cb(error, false);
 };
@@ -23,7 +21,7 @@ const fileFilter = (req, file, cb) => {
 export const upload = multer({
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10 MB maximum file size
+    fileSize: 25 * 1024 * 1024, // 25 MB maximum file size
   },
   fileFilter,
 });

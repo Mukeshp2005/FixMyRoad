@@ -17,47 +17,58 @@ console.log('ℹ️ Safe Configuration Summary loaded:', JSON.stringify(safeConf
 
 const PORT = safeConfig.port;
 
-// 2. Connect to MongoDB
-connectDB();
+let activeServer;
 
-// 3. Start Express server
-const server = app.listen(PORT, () => {
-  console.log(`🚀 FixMyRoad Server running in ${safeConfig.environment} mode on port ${PORT}`);
+const startServer = async () => {
+  const connected = await connectDB();
+  if (!connected) {
+    console.error('❌ Database connection failed. Background processors will not start.');
+  }
 
-  // Start background notification processor poller
-  startNotificationProcessor();
-  
-  // Start automated SLA escalation engine
-  startEscalationCron();
-});
+  // 3. Start Express server
+  activeServer = app.listen(PORT, () => {
+    console.log(`🚀 FixMyRoad Server running in ${safeConfig.environment} mode on port ${PORT}`);
+
+    if (connected) {
+      // Start background notification processor poller
+      startNotificationProcessor();
+      
+      // Start automated SLA escalation engine
+      startEscalationCron();
+    }
+  });
+  return activeServer;
+};
+
+startServer();
 
 // 4. Graceful Shutdown Handler
 const gracefulShutdown = async (signal) => {
   console.log(`\n🛑 Received ${signal}. Starting graceful shutdown sequence...`);
 
-  // Stop accepting new connections
-  server.close(async () => {
-    console.log('  ✓ HTTP server closed.');
-
-    // Stop background outbox poller and unlock PROCESSING jobs
-    await stopNotificationProcessor();
-
-    // Close MongoDB connection
-    try {
-      await mongoose.connection.close();
-      console.log('  ✓ MongoDB connection closed.');
-      process.exit(0);
-    } catch (err) {
-      console.error('❌ Error closing MongoDB connection during shutdown:', err.message);
-      process.exit(1);
+  const closeServer = () => new Promise((resolve) => {
+    if (activeServer) {
+      activeServer.close(resolve);
+    } else {
+      resolve();
     }
   });
 
-  // Force exit after 10 seconds if shutdown hangs
-  setTimeout(() => {
-    console.error('❌ Forced shutdown initiated after timeout.');
+  await closeServer();
+  console.log('  ✓ HTTP server closed.');
+
+  // Stop background outbox poller and unlock PROCESSING jobs
+  await stopNotificationProcessor();
+
+  // Close MongoDB connection
+  try {
+    await mongoose.connection.close();
+    console.log('  ✓ MongoDB connection closed.');
+    process.exit(0);
+  } catch (err) {
+    console.error('❌ Error closing MongoDB connection during shutdown:', err.message);
     process.exit(1);
-  }, 10000);
+  }
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
@@ -66,8 +77,12 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // Handle unhandled promise rejections gracefully
 process.on('unhandledRejection', (err) => {
   console.error('❌ UNHANDLED REJECTION! Shutting down server...', err);
-  server.close(async () => {
-    await mongoose.connection.close();
+  if (activeServer) {
+    activeServer.close(async () => {
+      await mongoose.connection.close();
+      process.exit(1);
+    });
+  } else {
     process.exit(1);
-  });
+  }
 });

@@ -16,6 +16,18 @@ export const resendOTPApi = async (data) => {
   return await api.post('/auth/resend-otp', data);
 };
 
+export const forgotPasswordApi = async (data) => {
+  return await api.post('/auth/forgot-password', data);
+};
+
+export const resetPasswordApi = async (data) => {
+  return await api.post('/auth/reset-password', data);
+};
+
+export const changePasswordApi = async (data) => {
+  return await api.post('/auth/change-password', data);
+};
+
 export const logoutApi = async () => {
   return await api.post('/auth/logout');
 };

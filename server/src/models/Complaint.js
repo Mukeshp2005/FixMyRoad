@@ -19,17 +19,7 @@ const complaintSchema = new mongoose.Schema(
     },
     issueType: {
       type: String,
-      enum: [
-        'POTHOLE',
-        'ROAD_CRACK',
-        'BROKEN_ROAD',
-        'WATERLOGGING',
-        'OPEN_MANHOLE',
-        'DAMAGED_DIVIDER',
-        'MISSING_ROAD_SIGN',
-        'DAMAGED_STREET_LIGHT',
-        'OTHER',
-      ],
+      trim: true,
       default: 'OTHER',
     },
     aiConfidence: {

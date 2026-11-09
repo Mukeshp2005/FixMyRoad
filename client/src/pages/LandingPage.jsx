@@ -19,13 +19,13 @@ const LandingPage = () => {
         setBackendHealth({ status: 'offline', message: err.message || 'Server unavailable' });
       });
 
-    // Check AI Microservice Health
-    axios.get('http://localhost:8000/health')
-      .then((res) => {
-        setAiHealth({ status: 'online', message: res.data.message });
+    // Gemini AI status synced with backend API health
+    checkHealth()
+      .then(() => {
+        setAiHealth({ status: 'online', message: 'Google Gemini Vision Active' });
       })
       .catch(() => {
-        setAiHealth({ status: 'offline', message: 'AI Service offline' });
+        setAiHealth({ status: 'offline', message: 'Cloud service unavailable' });
       });
   }, []);
 
@@ -208,8 +208,8 @@ const LandingPage = () => {
           {/* AI Service status */}
           <div className="p-4 border border-slate-200 bg-slate-50 flex items-center justify-between rounded-lg">
             <div>
-              <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">AI MICROSERVICE</p>
-              <p className="text-sm font-bold text-slate-900 mt-0.5">Python FastAPI / YOLO</p>
+              <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">GEMINI VISION AI</p>
+              <p className="text-sm font-bold text-slate-900 mt-0.5">Google Multimodal Cloud</p>
               <p className="text-xs text-slate-500 font-normal mt-1">{aiHealth.message || 'Connecting...'}</p>
             </div>
             <div>

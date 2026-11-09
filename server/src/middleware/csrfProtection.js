@@ -21,8 +21,17 @@ export const csrfProtectionMiddleware = (req, res, next) => {
     return next();
   }
 
-  // Bypass CSRF for public login/register/logout routes
-  const publicPaths = ['/api/auth/login', '/api/auth/register', '/api/auth/logout', '/api/health'];
+  // Bypass CSRF for public login/register/logout/password recovery routes
+  const publicPaths = [
+    '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/verify-otp',
+    '/api/auth/resend-otp',
+    '/api/auth/forgot-password',
+    '/api/auth/reset-password',
+    '/api/auth/logout',
+    '/api/health'
+  ];
   if (publicPaths.some((p) => req.path.startsWith(p))) {
     return next();
   }
