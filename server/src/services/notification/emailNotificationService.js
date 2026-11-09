@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import axios from 'axios';
 import { renderMunicipalityEmailContent } from './templates/municipalityEmailTemplate.js';
 import { sendMockNotification } from './mockProvider.js';
 
@@ -49,17 +50,23 @@ export const createMailTransporter = () => {
 };
 
 /**
- * Determines whether email dispatch should operate in MOCK or SMTP mode.
- * Auto-detects: if valid SMTP credentials exist in environment, defaults to SMTP.
+ * Determines whether email dispatch should operate in MOCK or SMTP/API mode.
+ * Auto-detects: if valid SMTP or Brevo credentials exist in environment, defaults to REAL email dispatch.
  */
 export const isMockEmailMode = () => {
   const deliveryMode = (process.env.NOTIFICATION_DELIVERY_MODE || '').toLowerCase().trim();
   const smtpUser = process.env.SMTP_USER ? process.env.SMTP_USER.trim() : '';
   const smtpPassword = process.env.SMTP_PASSWORD ? process.env.SMTP_PASSWORD.trim() : '';
+  const brevoApiKey = (process.env.BREVO_API_KEY || '').trim();
 
   // Explicit MOCK requested
   if (deliveryMode === 'mock') {
     return true;
+  }
+
+  // If Brevo HTTPS API key is present, always use real email mode (Render compatible)
+  if (brevoApiKey && brevoApiKey.startsWith('xkeysib-')) {
+    return false;
   }
 
   // Explicit SMTP / REAL requested
@@ -67,7 +74,7 @@ export const isMockEmailMode = () => {
     return false;
   }
 
-  // Auto-detect: If credentials are provided and not dummy placeholders, use SMTP
+  // Auto-detect: If credentials are provided and not dummy placeholders, use real email
   const hasValidCreds = Boolean(
     smtpUser &&
     smtpPassword &&
@@ -88,14 +95,72 @@ export const resolveFromEmail = () => {
   const smtpHost = (process.env.SMTP_HOST || 'smtp.gmail.com').toLowerCase();
 
   if (smtpHost.includes('gmail.com') || (process.env.SMTP_SERVICE || '').toLowerCase() === 'gmail') {
-    return smtpUser || configuredFrom || 'notifications@fixmyroad.com';
+    return smtpUser || configuredFrom || 'mukeshprabhu2004@gmail.com';
   }
 
   if (configuredFrom && !configuredFrom.endsWith('.local')) {
     return configuredFrom;
   }
 
-  return smtpUser || 'notifications@fixmyroad.com';
+  return smtpUser || 'mukeshprabhu2004@gmail.com';
+};
+
+/**
+ * Sends transactional email via Brevo REST API over HTTPS (Port 443).
+ * Render never blocks Port 443, eliminating all SMTP timeout issues.
+ */
+export const sendViaBrevoIfAvailable = async ({ to, toName, subject, htmlContent, textContent }) => {
+  const brevoApiKey = (process.env.BREVO_API_KEY || '').trim();
+  if (!brevoApiKey || !brevoApiKey.startsWith('xkeysib-')) {
+    return null; // Brevo not configured, fall through to SMTP
+  }
+
+  const senderEmail = resolveFromEmail();
+  const senderName = process.env.NOTIFICATION_FROM_NAME || 'FixMyRoad System';
+
+  try {
+    const payload = {
+      sender: {
+        name: senderName,
+        email: senderEmail,
+      },
+      to: [
+        {
+          email: to,
+          name: toName || to.split('@')[0],
+        },
+      ],
+      subject,
+      htmlContent,
+      textContent,
+    };
+
+    const response = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+      headers: {
+        accept: 'application/json',
+        'api-key': brevoApiKey,
+        'content-type': 'application/json',
+      },
+      timeout: 10000,
+    });
+
+    console.log(`✅ [EMAIL DISPATCH: BREVO HTTPS SUCCESS] Delivered email to ${to}. MessageId: ${response.data?.messageId}`);
+
+    return {
+      success: true,
+      provider: 'BREVO_HTTPS',
+      providerMessageId: response.data?.messageId || `BREVO-${Date.now()}`,
+      deliveredAt: new Date(),
+    };
+  } catch (err) {
+    const errMsg = err.response?.data?.message || err.message;
+    console.error(`❌ [EMAIL DISPATCH: BREVO ERROR] Failed to send email via Brevo:`, errMsg);
+    return {
+      success: false,
+      provider: 'BREVO_FAILED',
+      error: errMsg,
+    };
+  }
 };
 
 /**
@@ -107,12 +172,25 @@ export const sendEmailNotification = async ({ recipient, payload }) => {
     return await sendMockNotification({ channel: 'EMAIL', recipient, payload });
   }
 
+  const { subject, html, text } = renderMunicipalityEmailContent(payload);
+
+  // 1. Try Brevo HTTPS API first (fast, reliable on cloud hosts like Render)
+  const brevoResult = await sendViaBrevoIfAvailable({
+    to: recipient,
+    subject,
+    htmlContent: html,
+    textContent: text,
+  });
+
+  if (brevoResult && brevoResult.success) {
+    return brevoResult;
+  }
+
+  // 2. Fall back to standard SMTP if Brevo was not configured
   try {
     const transporter = createMailTransporter();
     const fromEmail = resolveFromEmail();
     const fromName = process.env.NOTIFICATION_FROM_NAME || 'FixMyRoad';
-
-    const { subject, html, text } = renderMunicipalityEmailContent(payload);
 
     const mailOptions = {
       from: `"${fromName}" <${fromEmail}>`,
@@ -133,9 +211,6 @@ export const sendEmailNotification = async ({ recipient, payload }) => {
     };
   } catch (err) {
     console.error(`❌ [EMAIL DISPATCH: SMTP ERROR] Failed to send email to ${recipient}:`, err.message);
-    if (err.code) {
-      console.error(`   Error code: ${err.code}`);
-    }
     if (process.env.NODE_ENV === 'production') {
       throw err;
     }
@@ -185,6 +260,20 @@ export const sendOTPEmail = async ({ recipient, otp, name }) => {
     return { success: true, provider: 'MOCK', mock: true };
   }
 
+  // 1. Try Brevo HTTPS API first (fast, reliable on Render cloud)
+  const brevoResult = await sendViaBrevoIfAvailable({
+    to: recipient,
+    toName: name,
+    subject,
+    htmlContent: html,
+    textContent: text,
+  });
+
+  if (brevoResult && brevoResult.success) {
+    return brevoResult;
+  }
+
+  // 2. Fall back to standard SMTP if Brevo is not configured or failed
   try {
     const transporter = createMailTransporter();
     const fromEmail = resolveFromEmail();
@@ -207,13 +296,10 @@ export const sendOTPEmail = async ({ recipient, otp, name }) => {
     };
   } catch (err) {
     console.error(`❌ [EMAIL DISPATCH: SMTP ERROR] Failed to send OTP email to ${recipient}:`, err.message);
-    if (err.code) {
-      console.error(`   Error code: ${err.code}`);
-    }
     return { 
       success: false, 
-      provider: 'SMTP_FAILED', 
-      error: err.message,
+      provider: brevoResult?.provider || 'SMTP_FAILED', 
+      error: brevoResult?.error || err.message,
       code: err.code 
     };
   }
@@ -261,6 +347,20 @@ export const sendPasswordResetEmail = async ({ recipient, otp, name }) => {
     return { success: true, provider: 'MOCK', mock: true };
   }
 
+  // 1. Try Brevo HTTPS API first (fast, reliable on cloud hosts)
+  const brevoResult = await sendViaBrevoIfAvailable({
+    to: recipient,
+    toName: name,
+    subject,
+    htmlContent: html,
+    textContent: text,
+  });
+
+  if (brevoResult && brevoResult.success) {
+    return brevoResult;
+  }
+
+  // 2. Fall back to standard SMTP if Brevo is not configured or failed
   try {
     const transporter = createMailTransporter();
     const fromEmail = resolveFromEmail();
@@ -283,13 +383,10 @@ export const sendPasswordResetEmail = async ({ recipient, otp, name }) => {
     };
   } catch (err) {
     console.error(`❌ [EMAIL DISPATCH: SMTP ERROR] Failed to send password reset email to ${recipient}:`, err.message);
-    if (err.code) {
-      console.error(`   Error code: ${err.code}`);
-    }
     return { 
       success: false, 
-      provider: 'SMTP_FAILED', 
-      error: err.message,
+      provider: brevoResult?.provider || 'SMTP_FAILED', 
+      error: brevoResult?.error || err.message,
       code: err.code 
     };
   }
