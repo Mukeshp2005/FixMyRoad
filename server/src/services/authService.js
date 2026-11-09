@@ -435,6 +435,10 @@ export const resetUserPassword = async ({ email, otp, newPassword, confirmPasswo
   user.password = newPassword;
   user.passwordResetOTP = undefined;
   user.passwordResetExpires = undefined;
+  // If user successfully verified email via password reset OTP, mark email as fully verified:
+  user.isEmailVerified = true;
+  user.emailVerificationOTP = undefined;
+  user.otpExpiresAt = undefined;
   await user.save();
 
   console.log(`✅ [PASSWORD RESET] Password successfully updated for ${normalizedEmail}`);
