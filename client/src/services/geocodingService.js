@@ -15,3 +15,17 @@ export const reverseGeocodeApi = async (latitude, longitude) => {
     },
   });
 };
+
+/**
+ * Perform forward geocoding to search localities or road landmarks by text query.
+ * Calls Express backend API.
+ * @param {string} query 
+ * @returns {Promise<Object>} API response with list of matched locations
+ */
+export const searchPlacesApi = async (query) => {
+  return await api.get('/geocoding/search', {
+    params: {
+      q: query,
+    },
+  });
+};

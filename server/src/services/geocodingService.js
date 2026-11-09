@@ -93,3 +93,71 @@ export const reverseGeocode = async (lat, lon) => {
     throw err;
   }
 };
+
+/**
+ * Forward geocoding: Search places/localities by text query
+ * @param {string} query - Location text query (e.g. "Gandhipuram, Coimbatore")
+ * @returns {Promise<Array>} Array of matching places with coordinates
+ */
+export const searchAddress = async (query) => {
+  if (!query || typeof query !== 'string' || query.trim().length < 2) {
+    return [];
+  }
+
+  const trimmed = query.trim();
+  const cacheKey = `search_${trimmed.toLowerCase()}`;
+  const cached = geocodeCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const baseUrl = process.env.GEOCODING_BASE_URL || 'https://nominatim.openstreetmap.org';
+
+  try {
+    const response = await axios.get(`${baseUrl}/search`, {
+      params: {
+        format: 'jsonv2',
+        q: trimmed,
+        limit: 5,
+        addressdetails: 1,
+      },
+      headers: {
+        'User-Agent': 'FixMyRoad/1.0 (contact@fixmyroad.local)',
+        'Accept-Language': 'en',
+      },
+      timeout: 7000,
+    });
+
+    if (!Array.isArray(response.data)) {
+      return [];
+    }
+
+    const results = response.data.map((item) => {
+      const addr = item.address || {};
+      return {
+        latitude: parseFloat(item.lat),
+        longitude: parseFloat(item.lon),
+        displayName: item.display_name,
+        address:
+          item.name ||
+          [addr.road, addr.suburb, addr.neighbourhood].filter(Boolean).join(', ') ||
+          item.display_name,
+        city: addr.city || addr.town || addr.village || addr.municipality || addr.county || '',
+        district: addr.state_district || addr.district || addr.county || addr.city || '',
+        state: addr.state || '',
+        country: addr.country || '',
+        postalCode: addr.postcode || '',
+      };
+    });
+
+    geocodeCache.set(cacheKey, {
+      timestamp: Date.now(),
+      data: results,
+    });
+
+    return results;
+  } catch (error) {
+    console.error('❌ Search Geocoding Error:', error.message);
+    return [];
+  }
+};

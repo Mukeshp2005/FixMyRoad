@@ -38,26 +38,43 @@ const LocationStatus = ({ status, accuracy, source, errorMessage }) => {
   }
 
   if (status === 'success') {
-    const isLowAccuracy = accuracy && accuracy > 100;
+    const isGpsLowAccuracy = source === 'GPS' && accuracy && accuracy > 100;
+    const isIpLocation = accuracy && accuracy > 5000;
+
+    let sourceLabel = 'Browser GPS';
+    if (source === 'MAP') sourceLabel = 'Interactive Map Pin';
+    if (source === 'SEARCH') sourceLabel = 'Locality Search';
 
     return (
       <div className="space-y-2">
         <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span className="font-semibold text-white">Location Detected via {source === 'GPS' ? 'Browser GPS' : 'Map Pin'}</span>
+            <span className="font-semibold text-white">Location: {sourceLabel}</span>
           </div>
-          {accuracy && (
+          {source === 'GPS' && accuracy && (
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
-              Accuracy: ~{Math.round(accuracy)}m
+              {accuracy > 1000 ? `~${Math.round(accuracy / 1000)} km (IP)` : `~${Math.round(accuracy)}m (GPS)`}
+            </span>
+          )}
+          {source !== 'GPS' && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-700 text-emerald-300">
+              Exact Pinpoint
             </span>
           )}
         </div>
 
-        {isLowAccuracy && (
-          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start space-x-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>Your GPS accuracy is low (~{Math.round(accuracy)}m). Please verify or adjust the marker on the map below.</span>
+        {isGpsLowAccuracy && (
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs space-y-1">
+            <div className="flex items-center space-x-1.5 font-semibold text-amber-200">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{isIpLocation ? 'PC/Laptop Internet Location' : 'Low GPS Accuracy'}</span>
+            </div>
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              {isIpLocation
+                ? 'Desktop browsers lack satellite GPS chips and estimate location using your ISP internet hub. Use the search bar or click on the map to place the pin on your exact road.'
+                : `GPS estimated position within ~${Math.round(accuracy)}m. Click anywhere on the map to adjust to the exact road defect.`}
+            </p>
           </div>
         )}
       </div>

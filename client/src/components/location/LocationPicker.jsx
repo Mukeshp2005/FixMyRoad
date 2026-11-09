@@ -1,17 +1,23 @@
 import React, { useState } from 'react';
-import { Navigation, MapPin, CheckCircle2, RefreshCw, AlertCircle, Loader2, ShieldCheck, Map } from 'lucide-react';
+import { Navigation, MapPin, CheckCircle2, RefreshCw, AlertCircle, Loader2, ShieldCheck, Map, Search } from 'lucide-react';
 import LocationMap from './LocationMap';
 import LocationStatus from './LocationStatus';
-import { reverseGeocodeApi } from '../../services/geocodingService';
+import { reverseGeocodeApi, searchPlacesApi } from '../../services/geocodingService';
 
 const LocationPicker = ({ onLocationConfirmed }) => {
   const [coordinates, setCoordinates] = useState({ latitude: null, longitude: null, accuracy: null });
   const [addressData, setAddressData] = useState(null);
-  const [source, setSource] = useState('GPS'); // 'GPS' | 'MAP'
+  const [source, setSource] = useState('GPS'); // 'GPS' | 'MAP' | 'SEARCH'
   const [gpsStatus, setGpsStatus] = useState('idle'); // idle | detecting | success | denied | unavailable | timeout | error
   const [gpsErrorMsg, setGpsErrorMsg] = useState('');
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
+
+  // Search locality state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
 
   // 1. Browser GPS Geolocation Handler
   const handleDetectLocation = () => {
@@ -67,7 +73,46 @@ const LocationPicker = ({ onLocationConfirmed }) => {
     fetchReverseGeocode(lat, lon);
   };
 
-  // 3. Reverse Geocode API call via Express Backend
+  // 3. Search Area / Locality Handler
+  const handleSearchSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    try {
+      setIsSearching(true);
+      setSearchError('');
+      const res = await searchPlacesApi(searchQuery.trim());
+      if (res.data && res.data.length > 0) {
+        setSearchResults(res.data);
+      } else {
+        setSearchResults([]);
+        setSearchError('No places found. Try a nearby landmark, street, or city.');
+      }
+    } catch (err) {
+      setSearchError('Failed to search location. Please click directly on the map.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSelectSearchResult = (place) => {
+    setCoordinates({ latitude: place.latitude, longitude: place.longitude, accuracy: null });
+    setAddressData({
+      address: place.address || place.displayName,
+      city: place.city || '',
+      district: place.district || '',
+      state: place.state || '',
+      country: place.country || '',
+      postalCode: place.postalCode || '',
+    });
+    setSource('SEARCH');
+    setGpsStatus('success');
+    setIsConfirmed(false);
+    setSearchResults([]);
+    setSearchError('');
+  };
+
+  // 4. Reverse Geocode API call via Express Backend
   const fetchReverseGeocode = async (lat, lon) => {
     try {
       setIsGeocoding(true);
@@ -92,7 +137,7 @@ const LocationPicker = ({ onLocationConfirmed }) => {
     }
   };
 
-  // 4. Confirm Location Action
+  // 5. Confirm Location Action
   const handleConfirmLocation = () => {
     if (!coordinates.latitude || !coordinates.longitude) return;
 
@@ -152,6 +197,54 @@ const LocationPicker = ({ onLocationConfirmed }) => {
         source={source}
         errorMessage={gpsErrorMsg}
       />
+
+      {/* Locality / Street Search Bar */}
+      <div className="relative">
+        <form onSubmit={handleSearchSubmit} className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search locality, street, or landmark (e.g. Gandhipuram, Anna Nagar, T Nagar)..."
+              className="w-full pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500 shadow-inner"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isSearching || !searchQuery.trim()}
+            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {isSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+            <span>{isSearching ? 'Searching...' : 'Search'}</span>
+          </button>
+        </form>
+
+        {searchError && (
+          <p className="text-[11px] text-amber-400 mt-1 pl-1">{searchError}</p>
+        )}
+
+        {/* Search Results Dropdown */}
+        {searchResults.length > 0 && (
+          <div className="absolute left-0 right-0 top-full mt-1.5 z-[1500] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden divide-y divide-slate-800 max-h-60 overflow-y-auto">
+            {searchResults.map((res, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSelectSearchResult(res)}
+                className="w-full text-left p-3 hover:bg-slate-800/80 transition-colors flex items-start space-x-2 text-xs cursor-pointer"
+              >
+                <MapPin className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-white">{res.address}</p>
+                  <p className="text-[11px] text-slate-400 line-clamp-1">{res.displayName}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Interactive Map */}
       <LocationMap
