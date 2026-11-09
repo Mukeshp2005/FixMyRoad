@@ -21,7 +21,7 @@ export const csrfProtectionMiddleware = (req, res, next) => {
     return next();
   }
 
-  // Bypass CSRF for public login/register/logout/password recovery routes
+  // 1. Bypass CSRF for public login/register/logout/password recovery routes
   const publicPaths = [
     '/api/auth/login',
     '/api/auth/register',
@@ -30,16 +30,24 @@ export const csrfProtectionMiddleware = (req, res, next) => {
     '/api/auth/forgot-password',
     '/api/auth/reset-password',
     '/api/auth/logout',
-    '/api/health'
+    '/api/health',
+    '/api/uploads',
   ];
   if (publicPaths.some((p) => req.path.startsWith(p))) {
+    return next();
+  }
+
+  // 2. Bearer Token Authentication Immunity:
+  // When an Authorization: Bearer token is provided in HTTP headers, cross-site forgery (CSRF)
+  // is mathematically impossible because browsers never automatically attach custom Authorization headers.
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
     return next();
   }
 
   const cookieToken = req.cookies['XSRF-TOKEN'];
   const headerToken = req.headers['x-csrf-token'] || req.headers['x-xsrf-token'] || req.body?._csrf;
 
-  // If cookie authentication is being used, verify CSRF double-submit token
+  // 3. If cookie-only authentication is being used (without Bearer header), verify CSRF double-submit token
   if (req.cookies.token) {
     if (!cookieToken || !headerToken || cookieToken !== headerToken) {
       const error = new Error('Invalid or missing CSRF token. Cross-Site Request Forgery validation failed.');
